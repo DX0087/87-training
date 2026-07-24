@@ -38,22 +38,51 @@ public class OrderService : IOrderService
         if (customer is null)
             return ServiceResult<Order>.Fail("找不到指定的客戶");
 
-        if (lines is null || lines.Count == 0)
-            return ServiceResult<Order>.Fail("訂單至少需要一項商品");
+        var linesError = ValidateCreateOrderLines(lines);
+        if (linesError is not null)
+            return ServiceResult<Order>.Fail(linesError);
 
-        if (lines.Any(l => l.Quantity <= 0))
-            return ServiceResult<Order>.Fail("商品數量必須大於 0");
-
-        if (lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
-            return ServiceResult<Order>.Fail("同一商品請勿重複加入，請調整數量即可");
-
-        var errors = new List<string>();
         var order = new Order
         {
             CustomerId = customer.Id,
             Status = OrderStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
+
+        var lineErrors = await PopulateOrderItemsAsync(order, lines);
+        if (lineErrors.Count > 0)
+            return ServiceResult<Order>.Fail(lineErrors);
+
+        await _orderRepository.AddAsync(order);
+        await _orderRepository.SaveChangesAsync();
+
+        return ServiceResult<Order>.Ok(order);
+    }
+
+    /// <summary>
+    /// 建單前置驗證（明細層級）。回傳錯誤訊息；null 表示通過。
+    /// </summary>
+    private static string? ValidateCreateOrderLines(IReadOnlyList<NewOrderLine>? lines)
+    {
+        if (lines is null || lines.Count == 0)
+            return "訂單至少需要一項商品";
+
+        if (lines.Any(l => l.Quantity <= 0))
+            return "商品數量必須大於 0";
+
+        if (lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
+            return "同一商品請勿重複加入，請調整數量即可";
+
+        return null;
+    }
+
+    /// <summary>
+    /// 逐行檢查商品／庫存，通過則扣庫存並寫入品項（snapshot 存原價）。
+    /// 回傳累積錯誤；有錯誤時呼叫端不 SaveChanges（與重構前一致）。
+    /// </summary>
+    private async Task<List<string>> PopulateOrderItemsAsync(Order order, IReadOnlyList<NewOrderLine> lines)
+    {
+        var errors = new List<string>();
 
         foreach (var line in lines)
         {
@@ -81,13 +110,7 @@ public class OrderService : IOrderService
             });
         }
 
-        if (errors.Count > 0)
-            return ServiceResult<Order>.Fail(errors);
-
-        await _orderRepository.AddAsync(order);
-        await _orderRepository.SaveChangesAsync();
-
-        return ServiceResult<Order>.Ok(order);
+        return errors;
     }
 
     public async Task<ServiceResult<Order>> CancelOrderAsync(int id)
