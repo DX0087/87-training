@@ -1,4 +1,5 @@
 using OrderHub.Core.Domain;
+using OrderHub.Core.Services;
 
 namespace OrderHub.Tests;
 
@@ -64,5 +65,48 @@ public class OrderServicePricingTests
         };
 
         Assert.Equal(500m, service.CalculateTotal(order));
+    }
+
+    /// <summary>
+    /// 回歸：Gold 建單時 snapshot 必須是原價，總額只在 CalculateTotal 打 9 折一次
+    /// （先前 CreateOrder 對 Gold 先寫折後價，再算總額又折一次 → 實際 0.81 折）。
+    /// </summary>
+    [Fact]
+    public async Task CreateOrder_Gold_DoesNotDoubleDiscount()
+    {
+        using var db = TestSetup.CreateContext();
+        var service = TestSetup.CreateOrderService(db);
+        var customer = TestSetup.AddCustomer(db, CustomerTier.Gold);
+        var product = TestSetup.AddProduct(db, unitPrice: 100m);
+
+        var result = await service.CreateOrderAsync(customer.Id, new[] { new NewOrderLine(product.Id, 1) });
+
+        Assert.True(result.Success);
+        Assert.Equal(100m, result.Value!.Items.Single().UnitPriceSnapshot);
+
+        var order = await service.GetOrderAsync(result.Value.Id);
+        Assert.NotNull(order);
+        Assert.Equal(100m, service.CalculateSubtotal(order!));
+        Assert.Equal(90m, service.CalculateTotal(order!));
+    }
+
+    /// <summary>
+    /// 對照：Silver 仍只折一次（95 折），且 snapshot 為原價。
+    /// </summary>
+    [Fact]
+    public async Task CreateOrder_Silver_AppliesDiscountOnceOnTotal()
+    {
+        using var db = TestSetup.CreateContext();
+        var service = TestSetup.CreateOrderService(db);
+        var customer = TestSetup.AddCustomer(db, CustomerTier.Silver);
+        var product = TestSetup.AddProduct(db, unitPrice: 100m);
+
+        var result = await service.CreateOrderAsync(customer.Id, new[] { new NewOrderLine(product.Id, 1) });
+
+        Assert.True(result.Success);
+        Assert.Equal(100m, result.Value!.Items.Single().UnitPriceSnapshot);
+
+        var order = await service.GetOrderAsync(result.Value.Id);
+        Assert.Equal(95m, service.CalculateTotal(order!));
     }
 }
