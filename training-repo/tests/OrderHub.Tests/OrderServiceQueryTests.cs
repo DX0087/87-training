@@ -40,6 +40,52 @@ public class OrderServiceQueryTests
         Assert.Equal(3, result.TotalPages);
     }
 
+    /// <summary>
+    /// 回歸：1-based 頁碼時，第 1 頁必須是最新訂單（先前 Skip(page * pageSize) 會整頁錯位）。
+    /// </summary>
+    [Fact]
+    public async Task GetOrders_FirstPage_ContainsNewestOrders()
+    {
+        using var db = TestSetup.CreateContext();
+        var service = TestSetup.CreateOrderService(db);
+        var customer = TestSetup.AddCustomer(db);
+        var baseTime = DateTime.UtcNow;
+
+        // 25 筆：CreatedAt 遞減，最新的 index=0
+        for (var i = 0; i < 25; i++)
+            db.Orders.Add(new Order { CustomerId = customer.Id, Status = OrderStatus.Confirmed, CreatedAt = baseTime.AddMinutes(-i) });
+        db.SaveChanges();
+
+        var page1 = await service.GetOrdersAsync(1, 10, null);
+
+        Assert.Equal(10, page1.Items.Count);
+        Assert.Equal(baseTime, page1.Items[0].CreatedAt);
+        Assert.Equal(baseTime.AddMinutes(-9), page1.Items[^1].CreatedAt);
+    }
+
+    /// <summary>
+    /// 回歸：最後一頁不可空白，且筆數為餘數（先前 Skip 多跳一頁導致最後一頁 0 筆）。
+    /// </summary>
+    [Fact]
+    public async Task GetOrders_LastPage_IsNotEmpty()
+    {
+        using var db = TestSetup.CreateContext();
+        var service = TestSetup.CreateOrderService(db);
+        var customer = TestSetup.AddCustomer(db);
+
+        for (var i = 0; i < 25; i++)
+            db.Orders.Add(new Order { CustomerId = customer.Id, Status = OrderStatus.Confirmed, CreatedAt = DateTime.UtcNow.AddMinutes(-i) });
+        db.SaveChanges();
+
+        const int pageSize = 10;
+        var lastPage = await service.GetOrdersAsync(3, pageSize, null);
+
+        Assert.Equal(25, lastPage.TotalCount);
+        Assert.Equal(3, lastPage.TotalPages);
+        Assert.Equal(5, lastPage.Items.Count);
+        Assert.NotEmpty(lastPage.Items);
+    }
+
     [Fact]
     public async Task GetCustomerOrders_ReturnsOnlyThatCustomersOrders()
     {
