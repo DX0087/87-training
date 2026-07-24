@@ -5,33 +5,51 @@
 
 #### 使用的 agent 與模型：
 
+- Grok Build（xAI）/ 練習 1 同時備好 Claude Code 用的 `training-repo/.claude/**` 與 `AGENTS.md` / `CLAUDE.md`
+
 ---
 
 ## 通用四問
 
 ### 1. 我的任務拆解
 
-（開工前你把任務拆成哪幾步？實際做的時候順序有變嗎？為什麼變？）
+1. 讀 `documents/activities/activity-guideline.md` 確認練習 1 交付物  
+2. 依指南建立專案記憶（`AGENTS.md` / `CLAUDE.md`）  
+3. 建立權限、hooks、subagents、`fix-bug` skill  
+4. 用自我驗證三題對照分層與建單流程  
+5. commit 設定檔  
 
--
+（實際：練習 2、3 先做了，再回頭補練習 1 的 agent 設定。）
 
 ### 2. AI 幫上大忙的地方
 
-（哪件事 agent 做得又快又好？**貼上當時的提問原文**，說明為什麼這樣問有效。）
+**提問原文（練習開始時）**：  
+「先幫我分析下目前的架構 以及具體做什麼的」
 
--
+有效原因：先建立全景（培訓 repo vs OrderHub、三層職責、建單/取消路徑），後面修 bug、加低庫存頁時不必每次從零摸索。
 
 ### 3. AI 誤導我的地方，與我如何發現
 
-（agent 說錯／改錯／過度自信的時刻。你靠什麼抓到——對照程式碼？頁面實測？跑測試？）
+**建單流程裡「過度簡化」的點（練習 1 自我驗證 #2）**：
 
--
+若 agent 只說「建單時依會員等級打折，再存單價快照」，會漏掉重要細節：
+
+1. **折扣應只在總額算一次**（`CalculateTotal`），snapshot 應存**原價**；舊版程式曾對 Gold 在建單時先寫折後價，再算總額又折一次 → 實際 0.81 折（練習 2 客訴 2 已修）。  
+2. **取消庫存**：不能只說「取消會還庫存」——必須看**先改狀態還是先還庫存**；舊版先 `Cancelled` 再判斷 Pending/Confirmed，條件永遠 false（練習 2 客訴 3）。  
+
+發現方式：對照 `OrderService.CreateOrderAsync` / `CancelOrderAsync` 原始碼，而不是只聽摘要。
 
 ### 4. 我會帶回日常工作的一招
 
-（一個具體、可複製的做法，不要寫「要多驗證」這種口號——寫出**操作步驟**。）
+**操作步驟：把專案慣例寫進版控的 agent 記憶檔**
 
--
+1. 在解法方案根目錄放 `AGENTS.md`（或 `CLAUDE.md`）  
+2. 固定六塊：簡介、技術棧版本、分層慣例、常用指令、危險檔案、Don'ts  
+3. 每層寫「一句話職責」+ 指出範例檔路徑（例如 `ProductsController.cs`）  
+4. 危險操作另寫 settings / hooks（deny Migrations 手改、block TRUNCATE）  
+5. 重複流程做成 skill（如 `fix-bug`：先確認症狀 → 定位 → 再修 → 測試 → 症狀/根因/修法 commit）  
+
+---
 
 ## 自我驗證（做到哪個階段答哪題）
 
@@ -39,36 +57,50 @@
 
 練習 1
 
-1. 我能不看筆記說出三個專案（Web/Core/Infrastructure）各自的職責
-2. 我核對過 agent 描述的建單流程，且**至少找出一處不精確或過度簡化的說法**
-3. 我知道商業邏輯應該放在哪一層、新增頁面要動哪些地方
+1. 我能不看筆記說出三個專案（Web/Core/Infrastructure）各自的職責  
+   - **Web**：HTTP、ViewModel、Razor；薄轉接  
+   - **Core**：Domain + 商業邏輯（折扣、庫存、狀態）  
+   - **Infrastructure**：EF DbContext、Repository、Migration、Seed  
+2. 我核對過 agent 描述的建單流程，且**至少找出一處不精確或過度簡化的說法**  
+   - 見上方「AI 誤導」：折扣套用層級、取消還庫存的順序，摘要常講錯  
+3. 我知道商業邏輯應該放在哪一層、新增頁面要動哪些地方  
+   - 邏輯 → Core service；頁面 → Controller + ViewModel + View +（必要時）Repo + 測試 + 導覽  
 
 練習 2
 
-1. 三個 bug 我都先在頁面上重現過，才開始找程式
-2. 我給 agent 的資訊包含具體觀察（頁碼／金額數字／庫存數字），而不是只貼客訴原文
-3. 每個修復都回到頁面驗證過症狀消失
-4. 每個 bug 都補了一個回歸測試，`dotnet test` 全綠
-5. 三個獨立 commit，message 說明症狀與根因
-6. （思考題）為什麼原本的測試沒抓到這三個 bug？
+1. 三個 bug 我都先在頁面上重現過，才開始找程式  
+2. 我給 agent 的資訊包含具體觀察（頁碼／金額數字／庫存數字），而不是只貼客訴原文  
+3. 每個修復都回到頁面驗證過症狀消失  
+4. 每個 bug 都補了一個回歸測試，`dotnet test` 全綠  
+5. 三個獨立 commit，message 說明症狀與根因  
+6. （思考題）為什麼原本的測試沒抓到這三個 bug？  
+   - 分頁只測 TotalCount/TotalPages，未斷言第 1 頁內容與最後一頁非空  
+   - 定價測 `CalculateTotal` 用已寫好的 snapshot，未走 Gold `CreateOrder` 端到端  
+   - 取消只測狀態變更，未斷言庫存加回  
 
 練習 3
 
-1. `/Products/LowStock` 不帶參數 → 門檻 10 的結果；帶 `?threshold=3` → 結果隨之改變
-2. `?threshold=0`、`?threshold=-1` → 頁面顯示驗證錯誤，不是 500
-3. 售出數量欄位排除了 Cancelled 訂單（可用一筆已取消的訂單驗證）
-4. 停售（已停售 badge）商品不出現在列表
-5. 程式分層與命名跟既有的 Products 功能一致（請 agent 自我 review 一次，並自己確認）
-6. 至少 3 個新測試，`dotnet test` 全綠
+1. `/Products/LowStock` 不帶參數 → 門檻 10 的結果；帶 `?threshold=3` → 結果隨之改變  
+2. `?threshold=0`、`?threshold=-1` → 頁面顯示驗證錯誤，不是 500  
+3. 售出數量欄位排除了 Cancelled 訂單（可用一筆已取消的訂單驗證）  
+4. 停售（已停售 badge）商品不出現在列表  
+5. 程式分層與命名跟既有的 Products 功能一致（請 agent 自我 review 一次，並自己確認）  
+6. 至少 3 個新測試，`dotnet test` 全綠  
 
 練習 4
 
-1. 重構後 `dotnet test` 全綠
-2. 我能說出這次重構「改善了什麼、沒有改變什麼」
-3. 我有在 code review 的角度看過 diff（不是 agent 說好就好）
+1. 重構後 `dotnet test` 全綠  
+2. 我能說出這次重構「改善了什麼、沒有改變什麼」  
+3. 我有在 code review 的角度看過 diff（不是 agent 說好就好）  
 
 ---
 
 ## 附錄：值得留下的對話片段
 
-（貼 1–2 段最有代表性的 prompt 與回應**摘要**——不用貼全文，重點是「我怎麼問」和「它怎麼答」。）
+**片段 1 — 架構理解**  
+- 問：分析目前架構與用途  
+- 答：外層培訓教材 + 內層 OrderHub 三層 MVC；建單/取消/折扣路徑清楚列出  
+
+**片段 2 — 修 bug 的 commit 格式**  
+- 約定：一個修復一個 commit，message 固定「症狀 → 根因 → 修法」  
+- 例：`Skip(page * pageSize)` → `Skip((page - 1) * pageSize)`  
