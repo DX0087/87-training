@@ -1,0 +1,10 @@
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[\r\n  {\r\n    \"Sku\": \"SKU-1048\",\r\n    \"Name\": \"晨光 行動電源\",\r\n    \"StockQuantity\": 1\r\n  },\r\n  {\r\n    \"Sku\": \"SKU-1005\",\r\n    \"Name\": \"極光 筆電支架\",\r\n    \"StockQuantity\": 3\r\n  },\r\n  {\r\n    \"Sku\": \"SKU-1023\",\r\n    \"Name\": \"雲峰 27吋螢幕\",\r\n    \"StockQuantity\": 3\r\n  },\r\n  {\r\n    \"Sku\": \"SKU-1014\",\r\n    \"Name\": \"星河 USB-C 集線器\",\r\n    \"StockQuantity\": 4\r\n  },\r\n  {\r\n    \"Sku\": \"SKU-1032\",\r\n    \"Name\": \"曜石 機械鍵盤\",\r\n    \"StockQuantity\": 4\r\n  }\r\n]"
+      }
+    ]
+  }
+}

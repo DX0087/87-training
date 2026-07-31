@@ -134,6 +134,89 @@ Web UI 亦可啟動（例：`http://localhost:6274`，需帶 `MCP_INSPECTOR_API_
 
 ---
 
+## 活動 2 — 練習 3：註冊給 agent + before/after
+
+**日期**：2026-07-31  
+**Agent**：Grok Build（兼寫 Claude 用的 `training-repo/.mcp.json`）
+
+### 註冊
+
+| 對象 | 設定 |
+|------|------|
+| Claude / 相容（版控） | `training-repo/.mcp.json` → `orderhub`：`dotnet run --project src/OrderHub.Mcp --no-build`（另保留 playwright） |
+| Grok（本機 user） | `~/.grok/config.toml` → `[mcp_servers.orderhub]`，`--project` 用**絕對路徑** + `--no-build` |
+
+驗證：
+
+```text
+grok mcp doctor orderhub
+→ handshake OK, 3 tools discovered
+tools: customer_orders, get_order, low_stock
+```
+
+> 當前 Grok **session** 不會自動載入剛加的 MCP；新開 session 或 `/mcps` reconnect 後才能 `search_tool`/`use_tool`。  
+> 本練習 after 用官方 Inspector / 同一 MCP 協定呼叫 `low_stock`，與 agent 呼叫工具等價。
+
+### 對照實驗：「哪些商品庫存低於 5？」
+
+#### Before — 關掉 / 不使用 OrderHub MCP
+
+Agent 沒有 `low_stock` 時，大致要繞這些路（實際演練）：
+
+1. 讀 `ProductService` / `IProductRepository` / 可能還要懂 `IsActive`、門檻是 `<` 還是 `<=`
+2. 自己寫查詢、開 SSMS、或爬網頁  
+3. 本機實際採用：**開網站** `GET /Products/LowStock?threshold=5` 再解析 HTML（或去 `/Products` 逐列看庫存）
+
+觀察到的結果（與 after 相同 5 筆，但步驟長）：
+
+| SKU | 庫存（頁面） |
+|-----|--------------|
+| SKU-1048 | 1 |
+| SKU-1005 | 3 |
+| SKU-1023 | 3 |
+| SKU-1032 | 4 |
+| SKU-1014 | 4 |
+
+**成本感**：要知道有低庫存頁、路由參數、怎麼解析；沒有現成頁時可能直接翻 DB / 寫 throwaway 程式。
+
+#### After — 開啟 OrderHub MCP
+
+一次工具呼叫：
+
+```text
+tools/call low_stock  threshold=5
+```
+
+回傳（JSON，已存檔）：
+
+| SKU | 名稱 | StockQuantity |
+|-----|------|---------------|
+| SKU-1048 | 晨光 行動電源 | 1 |
+| SKU-1005 | 極光 筆電支架 | 3 |
+| SKU-1023 | 雲峰 27吋螢幕 | 3 |
+| SKU-1014 | 星河 USB-C 集線器 | 4 |
+| SKU-1032 | 曜石 機械鍵盤 | 4 |
+
+證據：`documents/activities/activity-2-artifacts/practice3-after-low-stock-5.json`
+
+**成本感**：不需讀商業邏輯原始碼、不需開 SQL；工具 description 已說明「活躍 + 低於門檻 + 升冪」。
+
+### 差異一句話
+
+| | Before（無 MCP） | After（有 MCP） |
+|--|------------------|-----------------|
+| 步驟 | 找頁面 / 讀碼 / 查 DB / 解析 | **1 次** `low_stock` |
+| 答案來源 | 網站或資料庫 | 同一 DB，經 service/repo 封裝 |
+| 答錯風險 | 門檻條件寫錯、漏 IsActive | 與 server 實作綁定（單一真相） |
+
+### 驗收勾選
+
+- [x] orderhub 註冊成功，`grok mcp doctor` 見 3 tools（`.mcp.json` 進版控）  
+- [x] before/after 對照完成並寫入本節  
+- [x] 獨立 commit  
+
+---
+
 ## 通用四問
 
 ### 1. 我的任務拆解

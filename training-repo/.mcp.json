@@ -3,6 +3,10 @@
     "playwright": {
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "orderhub": {
+      "command": "dotnet",
+      "args": ["run", "--project", "src/OrderHub.Mcp", "--no-build"]
     }
   }
 }
