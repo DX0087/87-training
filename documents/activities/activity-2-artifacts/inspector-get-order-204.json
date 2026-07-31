@@ -1,1 +1,10 @@
-﻿{"result":{"content":[{"type":"text","text":"{\r\n  \"Id\": 204,\r\n  \"CreatedAt\": \"2026-07-31T02:45:08.2980151\",\r\n  \"Status\": \"Pending\",\r\n  \"Customer\": {\r\n    \"Id\": 9,\r\n    \"Name\": \"钄℃壙缈癨",\r\n    \"Tier\": \"Standard\"\r\n  },\r\n  \"Items\": [\r\n    {\r\n      \"ProductId\": 1,\r\n      \"Sku\": \"SKU-1001\",\r\n      \"Name\": \"妤靛厜 鐒＄窔婊戦紶\",\r\n      \"Quantity\": 1,\r\n      \"UnitPriceSnapshot\": 1420.00,\r\n      \"LineTotal\": 1420.00\r\n    }\r\n  ],\r\n  \"Subtotal\": 1420.00,\r\n  \"DiscountRate\": 0,\r\n  \"Total\": 1420.00\r\n}"}]}}
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\r\n  \"Id\": 204,\r\n  \"CreatedAt\": \"2026-07-31T02:45:08.2980151\",\r\n  \"Status\": \"Pending\",\r\n  \"Customer\": {\r\n    \"Id\": 9,\r\n    \"Name\": \"蔡承翰\",\r\n    \"Tier\": \"Standard\"\r\n  },\r\n  \"Items\": [\r\n    {\r\n      \"ProductId\": 1,\r\n      \"Sku\": \"SKU-1001\",\r\n      \"Name\": \"極光 無線滑鼠\",\r\n      \"Quantity\": 1,\r\n      \"UnitPriceSnapshot\": 1420.00,\r\n      \"LineTotal\": 1420.00\r\n    }\r\n  ],\r\n  \"Subtotal\": 1420.00,\r\n  \"DiscountRate\": 0,\r\n  \"Total\": 1420.00\r\n}"
+      }
+    ]
+  }
+}
