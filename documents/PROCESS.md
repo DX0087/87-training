@@ -69,6 +69,29 @@
 
 ---
 
+## 活動 2 — 練習 1：建立 OrderHub MCP Server（stdio）
+
+**日期**：2026-07-31
+
+### 交付
+
+- 專案：`training-repo/src/OrderHub.Mcp`（console + `ModelContextProtocol` 2.0.0）
+- 接線：與 Web 相同 DI（repo + `IOrderService`），log 走 stderr
+- 三個唯讀工具（SDK 轉 snake_case）：
+  | 方法 | 工具名 | 說明 |
+  |------|--------|------|
+  | `GetOrder` | `get_order` | 訂單明細 + 折扣/總額（`CalculateTotal`） |
+  | `LowStock` | `low_stock` | 活躍商品且庫存 &lt; threshold |
+  | `CustomerOrders` | `customer_orders` | 客戶訂單摘要 |
+- 驗證：`dotnet build src/OrderHub.Mcp` 成功
+
+### 注意
+
+- Entity 不直接 JSON 序列化（投影匿名物件，避免 Order↔Customer 循環）
+- 金額不在工具內重算折扣
+
+---
+
 ## 通用四問
 
 ### 1. 我的任務拆解
