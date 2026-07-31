@@ -1,0 +1,60 @@
+{
+  "at": "2026-07-31T03:35:11.778Z",
+  "checks": {
+    "resourcesList": {
+      "result": {
+        "resources": [
+          {
+            "name": "會員折扣規則",
+            "uri": "orderhub://discount-rules",
+            "description": "目前生效的會員折扣規則與計算方式",
+            "mimeType": "text/markdown"
+          }
+        ]
+      }
+    },
+    "resourcesRead": {
+      "result": {
+        "contents": [
+          {
+            "uri": "orderhub://discount-rules",
+            "mimeType": "text/markdown",
+            "text": "# OrderHub 會員折扣規則\n- Standard:不打折\n- Silver:95 折\n- Gold:9 折\n折扣在訂單總額上折抵一次,單價快照(UnitPriceSnapshot)為下單當下原價。"
+          }
+        ]
+      }
+    },
+    "promptsList": {
+      "result": {
+        "prompts": [
+          {
+            "name": "low_stock_report",
+            "description": "產生低庫存採購建議報告",
+            "arguments": [
+              {
+                "name": "threshold",
+                "description": "庫存門檻,預設 10",
+                "required": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "promptsGet": {
+      "result": {
+        "description": "產生低庫存採購建議報告",
+        "messages": [
+          {
+            "role": "user",
+            "content": {
+              "type": "text",
+              "text": "請用 low_stock 工具(threshold=5)查出低庫存商品,\n再用其他工具了解這些商品的近期訂單狀況,\n最後輸出採購建議表:SKU、名稱、現有庫存、建議補貨量、理由。"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "ok": true
+}

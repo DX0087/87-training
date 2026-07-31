@@ -269,6 +269,65 @@ Grok 本 session 未必自動掛新工具；重開 session 後對 agent 說「�
 
 ---
 
+## 活動 2 — 練習 5：Resources 與 Prompts
+
+**日期**：2026-07-31
+
+### 交付
+
+| 檔案 | 原語 | 內容 |
+|------|------|------|
+| `OrderHubResources.cs` | Resource | `orderhub://discount-rules`（markdown 會員折扣） |
+| `OrderHubPrompts.cs` | Prompt | `low_stock_report`（threshold 可調，引導用 `low_stock` 出採購表） |
+| `Program.cs` | 註冊 | `.WithResources<>()` + `.WithPrompts<>()` |
+
+### Inspector 驗收
+
+| 方法 | 結果 |
+|------|------|
+| `resources/list` | `會員折扣規則` @ `orderhub://discount-rules`，mime `text/markdown` |
+| `resources/read` | 含 Standard / Silver 95 折 / Gold 9 折、總額折一次、snapshot 原價 |
+| `prompts/list` | `low_stock_report`，參數 `threshold`（非必填） |
+| `prompts/get` threshold=5 | 展開 user 訊息，明確要求 `low_stock(threshold=5)` 與採購建議表 |
+
+證據：`documents/activities/activity-2-artifacts/practice5-verify.json`
+
+### 5c 思考題
+
+**1. 折扣規則用 Resource 給，vs 讓 agent 自己讀 `OrderService.cs`，差在哪？**
+
+| | Resource | 讀原始碼 |
+|--|----------|----------|
+| 對象 | 給 agent 的**產品知識**（規則摘要） | 實作細節（switch、方法名） |
+| 成本 | 固定短文，進 context 便宜 | 要搜檔、可能讀錯/讀過期片段 |
+| 共用 | 全隊同一 URI、可版控 | 每人自己找，答案容易不一致 |
+| 風險 | 字串與程式**兩份真相**（規則改了要同步 resource，或改成動態從 service 組字） | 與執行中行為可能脫節（看舊碼） |
+
+→ Resource 適合「穩定、要反覆引用的背景」；真正算錢仍應走 tool/`CalculateTotal`，不要在 resource 裡發明第二套公式。
+
+**2. Prompt 範本放 server，vs 每人自己打一段話，差在哪？**
+
+| | Server Prompt | 各自口頭 prompt |
+|--|---------------|-----------------|
+| 一致性 | 採購報告格式/步驟統一 | 有人忘 threshold、有人漏排除 Cancelled |
+| 改版 | 改一處 `OrderHubPrompts.cs` + 部署 | 改一堆聊天記錄/文件 |
+| 與 tool 合體 | 範本**點名** `low_stock`，引導正確工具 | 可能改去爬頁或亂讀 DB |
+| 入口 | Claude 可變成 `/mcp__orderhub__low_stock_report` | 無標準 slash |
+
+### 三者分工（記住）
+
+- **Tool** = 動作（查 / 改）  
+- **Resource** = 資料（放進 context）  
+- **Prompt** = 範本（替使用者說話，常再驅動 tool）  
+
+### 驗收勾選
+
+- [x] Inspector 讀得到 resource 與 prompt（含 threshold 展開）  
+- [x] 5c 思考寫入本節  
+- [x] 獨立 commit  
+
+---
+
 ## 通用四問
 
 ### 1. 我的任務拆解
