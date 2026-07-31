@@ -1,0 +1,67 @@
+{
+  "at": "2026-07-31T03:33:31.765Z",
+  "checks": {
+    "tools": [
+      {
+        "name": "customer_orders",
+        "description": "查詢某位客戶的全部訂單摘要(編號、日期、狀態、應付總額)",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "readOnlyHint": true
+      },
+      {
+        "name": "get_order",
+        "description": "依訂單編號查詢訂單,含客戶、品項、單價快照、會員折扣與應付總額",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "readOnlyHint": true
+      },
+      {
+        "name": "low_stock",
+        "description": "列出庫存低於門檻且仍在販售的商品,依庫存量升冪排序",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "readOnlyHint": true
+      },
+      {
+        "name": "cancel_order",
+        "description": "取消一筆訂單(僅限待處理/已確認狀態),品項庫存會自動回補。此操作會修改資料,無法還原",
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": false
+        },
+        "destructiveHint": true,
+        "idempotentHint": false
+      }
+    ],
+    "readOnlyOk": true,
+    "cancelAnnotationsOk": true,
+    "stockBefore": {
+      "sku": "SKU-1001",
+      "stockBefore": 24,
+      "orderId": 204,
+      "qty": 1
+    },
+    "cancelSuccess": {
+      "text": "訂單 204 已取消,庫存已回補",
+      "ok": true
+    },
+    "stockAfter": {
+      "sku": "SKU-1001",
+      "stockAfter": 25
+    },
+    "stockRestored": true,
+    "cancelAgain": {
+      "text": "取消失敗:狀態為 Cancelled 的訂單不可取消",
+      "ok": true
+    },
+    "cancelMissing": {
+      "text": "取消失敗:找不到指定的訂單",
+      "ok": true
+    }
+  },
+  "ok": true
+}

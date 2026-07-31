@@ -7,7 +7,7 @@ using OrderHub.Core.Interfaces;
 using OrderHub.Core.Services;
 
 /// <summary>
-/// OrderHub MCP 唯讀工具。金額計算重用 IOrderService，不重複實作折扣規則。
+/// OrderHub MCP 工具。金額與取消規則重用 IOrderService，不在此重複實作。
 /// </summary>
 [McpServerToolType]
 public class OrderHubTools(IOrderService orderService, IProductRepository productRepository)
@@ -19,7 +19,7 @@ public class OrderHubTools(IOrderService orderService, IProductRepository produc
         WriteIndented = true
     };
 
-    [McpServerTool, Description("依訂單編號查詢訂單,含客戶、品項、單價快照、會員折扣與應付總額")]
+    [McpServerTool(ReadOnly = true), Description("依訂單編號查詢訂單,含客戶、品項、單價快照、會員折扣與應付總額")]
     public async Task<string> GetOrder([Description("訂單 Id")] int id)
     {
         var order = await orderService.GetOrderAsync(id);
@@ -53,7 +53,7 @@ public class OrderHubTools(IOrderService orderService, IProductRepository produc
         return JsonSerializer.Serialize(result, Json);
     }
 
-    [McpServerTool, Description("列出庫存低於門檻且仍在販售的商品,依庫存量升冪排序")]
+    [McpServerTool(ReadOnly = true), Description("列出庫存低於門檻且仍在販售的商品,依庫存量升冪排序")]
     public async Task<string> LowStock([Description("庫存門檻,預設 10")] int threshold = 10)
     {
         var products = await productRepository.GetActiveAsync();
@@ -65,7 +65,7 @@ public class OrderHubTools(IOrderService orderService, IProductRepository produc
         return JsonSerializer.Serialize(items, Json);
     }
 
-    [McpServerTool, Description("查詢某位客戶的全部訂單摘要(編號、日期、狀態、應付總額)")]
+    [McpServerTool(ReadOnly = true), Description("查詢某位客戶的全部訂單摘要(編號、日期、狀態、應付總額)")]
     public async Task<string> CustomerOrders([Description("客戶 Id")] int customerId)
     {
         var orders = await orderService.GetCustomerOrdersAsync(customerId);
@@ -77,5 +77,18 @@ public class OrderHubTools(IOrderService orderService, IProductRepository produc
             Total = orderService.CalculateTotal(o)
         });
         return JsonSerializer.Serialize(result, Json);
+    }
+
+    /// <summary>
+    /// 會改資料：轉接 CancelOrderAsync（狀態檢查 + 庫存回補都在 service）。
+    /// </summary>
+    [McpServerTool(Destructive = true, Idempotent = false),
+     Description("取消一筆訂單(僅限待處理/已確認狀態),品項庫存會自動回補。此操作會修改資料,無法還原")]
+    public async Task<string> CancelOrder([Description("要取消的訂單 Id")] int id)
+    {
+        var result = await orderService.CancelOrderAsync(id);
+        return result.Success
+            ? $"訂單 {id} 已取消,庫存已回補"
+            : $"取消失敗:{result.ErrorMessage}";
     }
 }

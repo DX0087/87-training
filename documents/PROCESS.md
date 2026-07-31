@@ -217,6 +217,58 @@ tools/call low_stock  threshold=5
 
 ---
 
+## 活動 2 — 練習 4：cancel_order（會改資料的工具）
+
+**日期**：2026-07-31
+
+### 實作
+
+`OrderHubTools.cs`：
+
+| 工具 | 標註 | 行為 |
+|------|------|------|
+| `get_order` / `low_stock` / `customer_orders` | `ReadOnly = true` | 唯讀 |
+| `cancel_order` | `Destructive = true`, `Idempotent = false` | 轉接 `OrderService.CancelOrderAsync`（不重寫狀態/庫存規則） |
+
+### Inspector annotations（`tools/list`）
+
+| name | readOnlyHint | destructiveHint | idempotentHint |
+|------|--------------|-----------------|----------------|
+| get_order | true | — | — |
+| low_stock | true | — | — |
+| customer_orders | true | — | — |
+| cancel_order | — | true | false |
+
+### 行為驗證（官方 Inspector CLI）
+
+| 步驟 | 結果 |
+|------|------|
+| 取消待處理 **#204** | `訂單 204 已取消,庫存已回補` |
+| 庫存 SKU-1001 | 取消前 **24** → 取消後 **25**（+1，回補成功） |
+| 再取消 #204 | `取消失敗:狀態為 Cancelled 的訂單不可取消`（清楚訊息，非 exception） |
+| 取消 #999999 | `取消失敗:找不到指定的訂單` |
+
+證據：`documents/activities/activity-2-artifacts/practice4-verify.json`、`practice4-tools-list.json`
+
+### 心得（地雷）
+
+- **標註是 hint，不是強制**：client 可依 `destructiveHint` 跳確認；真正規則在 `CancelOrderAsync`。  
+- 唯讀工具若不標 `ReadOnly`，預設可能被當成有破壞性 → 多餘確認。  
+- 錯誤訊息要可讀，agent 才不會瞎重試。
+
+### Agent 確認提示
+
+Grok 本 session 未必自動掛新工具；重開 session 後對 agent 說「取消訂單 X」時，應看到破壞性工具的權限確認（依 client 政策）。本練習行為面已用 Inspector 直接 call 驗證。
+
+### 驗收勾選
+
+- [x] annotations 正確（3 唯讀 + cancel destructive/non-idempotent）  
+- [x] 取消成功 + 庫存回補  
+- [x] 重複取消 / 不存在訂單 → 清楚拒絕  
+- [x] PROCESS + 獨立 commit  
+
+---
+
 ## 通用四問
 
 ### 1. 我的任務拆解
