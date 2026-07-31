@@ -92,6 +92,48 @@
 
 ---
 
+## 活動 2 — 練習 2：用 MCP Inspector 除錯
+
+**日期**：2026-07-31  
+**環境**：Node v22.23.2；網站 `http://localhost:5150`；DB `OrderHubTraining`
+
+### 做法
+
+使用官方套件 `@modelcontextprotocol/inspector`（Inspector CLI）對 `OrderHub.Mcp` 做：
+
+- `tools/list`
+- `tools/call` → `low_stock` / `get_order`
+
+Web UI 亦可啟動（例：`http://localhost:6274`，需帶 `MCP_INSPECTOR_API_TOKEN`）。
+
+> CLI 參數順序：server 指令在 `--` **前**，`--method` 等在 `--` **後**。  
+> 例：`node inspector-cli.js dotnet run --project src/OrderHub.Mcp --no-build -- --method tools/list --format json`
+
+### 驗收結果
+
+| 檢查 | 結果 |
+|------|------|
+| 三工具 + description / 參數 | ✅ `customer_orders`(customerId)、`get_order`(id)、`low_stock`(threshold) |
+| `low_stock` threshold=10 vs `/Products/LowStock?threshold=10` | ✅ 同 5 筆：SKU-1048(1)、1005(3)、1023(3)、1014(4)、1032(4) |
+| `get_order` id=999999 | ✅ 清楚訊息「找不到訂單 999999」，非 exception dump |
+| （加測）`get_order` #204 | ✅ 蔡承翰 / SKU-1001 / Total 1420 |
+
+### 證據檔
+
+- `documents/activities/activity-2-artifacts/inspector-tools-list.json`
+- `documents/activities/activity-2-artifacts/inspector-low-stock.json`
+- `documents/activities/activity-2-artifacts/inspector-get-order-missing.json`
+- `documents/activities/activity-2-artifacts/inspector-get-order-204.json`
+- `documents/activities/activity-2-artifacts/inspector-web-skus.txt`
+
+### 驗收勾選
+
+- [x] 三工具清單與 description / 參數如預期  
+- [x] LowStock 與網站一致  
+- [x] 不存在訂單回清楚錯誤訊息  
+
+---
+
 ## 通用四問
 
 ### 1. 我的任務拆解
