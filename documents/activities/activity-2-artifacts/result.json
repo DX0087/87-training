@@ -1,8 +1,11 @@
 {
   "customer": "蔡承翰（一般會員）",
   "product": "SKU-1001 極光 無線滑鼠（庫存 25，NT$ 1,420.00）",
-  "resultUrl": "http://localhost:5150/Orders/Details/204",
-  "title": "訂單 #204\n        待處理",
-  "success": "訂單 #204 建立成功",
-  "at": "2026-07-31T02:45:09.466Z"
+  "resultUrl": "http://localhost:5150/Orders/Details/205",
+  "title": "訂單 #205 待處理",
+  "success": "訂單 #205 建立成功",
+  "total": "NT$ 1,420.00",
+  "path": "playwright-mcp",
+  "node": "v22.23.2",
+  "at": "2026-08-08T02:07:53.000Z"
 }

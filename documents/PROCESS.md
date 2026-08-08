@@ -11,8 +11,9 @@
 
 ## 活動 2 — 練習 0：接 Playwright MCP（先當使用者）
 
-**日期**：2026-07-31  
-**Agent**：Grok Build（本機 Node v18.18.2）
+**日期**：2026-07-31（腳本備援）／**2026-08-08 重驗（純 MCP）**  
+**Agent**：Grok Build  
+**Node**：v18.18.2（初驗）→ **v22.23.2**（重驗通過）
 
 ### 做了什麼
 
@@ -22,49 +23,57 @@
    - 專案級 `.grok/config.toml` 曾加過，但 Grok 對 **untrusted folder** 不啟動 repo-local MCP；改以 user 範圍為主（若要用 project 範圍，需在 TUI 執行 `/hooks-trust` 或啟動加 `--trust`）
 
 2. **啟動網站**
-   - `dotnet run --project src/OrderHub.Web --urls http://localhost:5150` → 正常 listening
+   - 在 `training-repo/`：`dotnet run --project src/OrderHub.Web --urls http://localhost:5150` → 正常 listening
 
 3. **任務：建立一筆新訂單 + 截圖結果頁**
-   - 本 session 當下無法即時載入剛加的 MCP tools（需重開 session / `/mcps` 重新連線）
-   - 另：`grok mcp doctor playwright` 伺服器能啟動，但 handshake 失敗，stderr：
-     > `You are running Node.js 18.18.2. Playwright requires Node.js 20 or higher.`
-   - **改以同等 Playwright 腳本完成驗收**（`playwright@1.49.1` 支援 Node 18）：
-     - 腳本：`documents/activities/activity-2-artifacts/create-order-screenshot.mjs`
-     - 截圖：`01-create-form.png`、`02-order-details.png`
-     - 結果：`result.json`
+
+#### 初驗（2026-07-31）— 腳本備援
+
+- 當時 Node 18：`grok mcp doctor playwright` handshake 失敗：
+  > `You are running Node.js 18.18.2. Playwright requires Node.js 20 or higher.`
+- **改以同等 Playwright 腳本驗收**（`playwright@1.49.1` 支援 Node 18）：
+  - 腳本：`documents/activities/activity-2-artifacts/create-order-screenshot.mjs`
+  - 結果：訂單 **#204**；截圖 `01-create-form.png`、`02-order-details.png`
+
+#### 重驗（2026-08-08）— 純 Playwright MCP（通過）
+
+- `node -v` → **v22.23.2**
+- `grok mcp doctor playwright` → **handshake OK**，protocol `2025-06-18`，**24 tools discovered**
+- Agent 直接呼叫 MCP（無需腳本）：
+  1. `browser_navigate` → `/Orders/Create`
+  2. `browser_select_option` 客戶「蔡承翰」、商品 SKU-1001
+  3. `browser_take_screenshot` → `01-create-form.png`
+  4. `browser_click`「送出訂單」
+  5. `browser_take_screenshot` → `02-order-details.png`
+- **設定無需改動**：既有 `~/.grok/config.toml` + `training-repo/.mcp.json` 即可；只缺 Node ≥20
 
 ### 具體結果數字（可覆核）
 
-| 項目 | 值 |
-|------|-----|
-| 客戶 | 蔡承翰（一般會員），Id=9 |
-| 商品 | SKU-1001 極光 無線滑鼠 × 1，Id=1，單價 NT$ 1,420.00 |
-| 結果 URL | `http://localhost:5150/Orders/Details/204` |
-| 狀態 | 待處理 |
-| 成功訊息 | 訂單 #204 建立成功 |
-| 應付總額 | NT$ 1,420.00（一般會員 0% 折扣） |
+| 項目 | 初驗（腳本） | 重驗（MCP） |
+|------|-------------|-------------|
+| 客戶 | 蔡承翰（一般會員） | 蔡承翰（一般會員） |
+| 商品 | SKU-1001 極光 無線滑鼠 × 1 | SKU-1001 極光 無線滑鼠 × 1 |
+| 結果 URL | `/Orders/Details/204` | `/Orders/Details/205` |
+| 狀態 | 待處理 | 待處理 |
+| 成功訊息 | 訂單 #204 建立成功 | 訂單 #205 建立成功 |
+| 應付總額 | NT$ 1,420.00 | NT$ 1,420.00 |
+| 路徑 | `create-order-screenshot.mjs` | Playwright MCP tools |
+| 證據 | `result.json`（已覆寫為 MCP 重驗） | 同左；截圖已更新 |
 
 ### 與活動 1 練習 2 的對比（指南要求寫進 PROCESS）
 
 | | 活動 1 練習 2（修 bug） | 活動 2 練習 0（有瀏覽器工具） |
 |--|------------------------|--------------------------------|
-| 重現方式 | **人**開瀏覽器：建單、翻分頁、對金額、取消後看庫存 | **Agent / 腳本**驅動 Chromium：進 `/Orders/Create` → 選客戶/商品 → 送出 → 截明細頁 |
+| 重現方式 | **人**開瀏覽器：建單、翻分頁、對金額、取消後看庫存 | **Agent + Playwright MCP** 驅動 Chromium：進 `/Orders/Create` → 選客戶/商品 → 送出 → 截明細頁 |
 | 觀察產出 | 人眼記「第幾頁」「金額多少」「庫存數字」再貼給 agent | 直接有 **截圖檔 + URL + 訂單號**，可當驗收物 |
-| 卡點 | 症狀清楚但定位仍要讀 code | 環境：MCP 要 Node ≥20；Grok 專案 MCP 要 folder trust；當前 session 需重連才有 MCP tools |
-| 體感 | 「agent 幫忙讀碼修 bug，但我是手」 | 「操作網頁也可以外包給工具」——活動 1 那種人工重現步驟，理論上可交給 Playwright |
+| 卡點 | 症狀清楚但定位仍要讀 code | 初驗卡在 Node ＜20；升級後 MCP 即可用。另：Grok 專案 MCP 要 folder trust |
+| 體感 | 「agent 幫忙讀碼修 bug，但我是手」 | 「操作網頁也可以外包給工具」——活動 1 那種人工重現步驟，可交給 Playwright MCP |
 
-**一句話**：活動 1 是人當操作者、agent 當分析者；練習 0 展示 agent 也可當操作者——前提是 MCP 環境（Node、trust、session 連線）就緒。
-
-### 後續若要讓 Grok 直接呼叫 Playwright MCP
-
-1. 升級本機 Node 到 **≥ 20**（目前 18.18.2 會讓 `@playwright/mcp@latest` 握手失敗）  
-2. 重開 Grok session（或 `/mcps` reconnect）  
-3. 確認 `grok mcp doctor playwright` 為 healthy  
-4. 再下 prompt：`網站在 http://localhost:5150，請建立一筆新訂單並截圖結果頁`
+**一句話**：活動 1 是人當操作者、agent 當分析者；練習 0 展示 agent 也可當操作者——Node ≥20 + MCP 連線就緒後，無需手寫腳本即可完成建單與截圖。
 
 ### 驗收勾選
 
-- [x] 能自動開瀏覽器完成建單並留下截圖（腳本路徑完成；MCP 路徑受 Node 版本擋住）
+- [x] 能自動開瀏覽器完成建單並留下截圖（**2026-08-08 純 MCP 路徑通過**；初驗曾用腳本備援）
 - [x] 與活動 1 人工重現的對比已寫入本節
 
 ---
