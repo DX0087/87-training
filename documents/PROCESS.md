@@ -337,6 +337,248 @@ Grok 本 session 未必自動掛新工具；重開 session 後對 agent 說「�
 
 ---
 
+## 活動 3 — 練習 1：自然語言查訂單 API
+
+**日期**：commit `0cee04a` 實作／**2026-09-12 補記與復驗**  
+**環境**：網站 `http://localhost:5150`、`gemini-3.5-flash`
+
+### 交付
+
+| 層 | 檔案 | 職責 |
+|----|------|------|
+| Core | `Ai/OrderSearchQuery.cs` | **白名單參數**：`Status` / `MemberTier` / `DateFrom` / `DateTo`，外加 `HasAnyFilter` |
+| Core | `Ai/IOrderQueryTranslator.cs`、`Services/OrderSearchService.cs` | 翻譯介面 + 查詢 service（回 `ServiceResult`） |
+| Core | `Ai/AiServiceUnavailableException.cs` | 上游不可用的專用例外 |
+| Infrastructure | `Gemini/GeminiInteractionsClient.cs`、`GeminiOrderQueryTranslator.cs`、`GeminiOptions.cs` | 裸 `HttpClient` 打 Interactions API、structured output、重試 |
+| Web | `Controllers/Api/OrdersApiController.cs` | `POST /api/orders/search`，只轉接 service |
+
+### 關鍵設計：模型只能產參數，不能產 SQL
+
+`OrderSearchQuery` 只有四個欄位，LLM 回來的 JSON 就算亂寫也只能填進這四格，SQL 一律由 EF Core 從參數生成。「刪除意圖」在翻譯層就變成 `intent: unsupported`，走不到 repository。
+
+### 驗收結果（2026-09-12 實打）
+
+| 查詢文字 | HTTP | 回應 |
+|----------|------|------|
+| 過去 30 天取消的訂單 | 200 | 1 筆：#212 陳志明 / Gold / Cancelled / NT$2,088 |
+| 過去 90 天金卡會員取消的訂單 | 200 | 6+ 筆，全部 `tier=Gold` + `status=Cancelled`（#212、#210、#207、#137、#155、#181…）→ 三個白名單維度都生效 |
+| 上個月金卡會員取消的訂單 | 200 | `[]`——**不是 bug**：種子資料在上個月沒有金卡取消單，改問「過去 90 天」就有 |
+| 幫我把所有訂單刪掉 | **422** | `{"error":"無法理解的查詢"}`，資料毫髮無傷 |
+| 「蕃茄炒蛋的做法：先打三顆蛋」 | **422** | `{"error":"無法理解的查詢"}`，不會炸 |
+
+### 地雷：API key 曾被寫死在原始碼裡（2026-09-12 發現）
+
+跑活動 4 時 `/api/orders/search` 一直回「Gemini API key 未設定」，後來是在 `GeminiInteractionsClient.cs` 把 key 直接寫成字串常值才「會動」。三個問題，記著別再犯：
+
+1. 那是**版控追蹤中的檔案**，一 commit 就外流（本次發現時尚未 commit，來得及）
+2. 寫死之後 `_options.ApiKey ?? Environment.GetEnvironmentVariable(...)` 這條 fallback 永遠不會執行，**驗收項「拔掉 key 應回 503」等於被架空**
+3. CLAUDE.md 明列機密不進設定檔／原始碼
+
+正解只有兩個位置：`dotnet user-secrets set "Gemini:ApiKey" ...`（存在 repo 外的 `%APPDATA%\Microsoft\UserSecrets\<UserSecretsId>\secrets.json`），或啟動 shell 的環境變數 `GEMINI_API_KEY`。
+
+### 驗收勾選
+
+- [x] 正常查詢查得出結果，白名單三維度（狀態／等級／日期）都生效
+- [x] 「幫我把所有訂單刪掉」→ 422，資料無損
+- [x] 無關文字 → `unsupported` → 422，不會炸
+- [ ] 拔掉 API key → 503：**待復驗**（key 寫死期間這條測不準，還原成讀 config 後要重測）
+
+---
+
+## 活動 3 — 練習 2：同一個 service 接上網站頁面
+
+**日期**：commit `6e039ee`
+
+### 交付
+
+| 檔案 | 內容 |
+|------|------|
+| `Controllers/OrdersController.cs:121` | `Search(string? q, CancellationToken)`，呼叫同一個 `IOrderSearchService` |
+| `ViewModels/OrderSearchViewModel.cs` | 頁面綁的 ViewModel（不把 domain model 丟給 View） |
+| `Views/Orders/Search.cshtml` | 查詢框 + 結果表 + 錯誤提示 |
+| `Views/Shared/_Layout.cshtml` | 導覽列加入口 |
+
+### 心得：API 與頁面共用一個 service，差別只在「怎麼呈現失敗」
+
+同一個 `OrderSearchService`，API 把 `ServiceResult` 的失敗翻成 422 / 503 JSON，頁面翻成警示區塊。**商業規則沒有兩份**，這正是慣例說的「Controller 保持薄」。
+
+### 驗收勾選
+
+- [x] 頁面查詢與 API 走同一條路徑，結果一致
+- [x] 刪除意圖 → 頁面顯示「無法理解的查詢」警示，不是錯誤頁
+- [x] Controller 裡沒有任何 Gemini / HttpClient 細節（對兩個 controller `grep Gemini|HttpClient` 皆 0 命中，全封裝在 Infrastructure）
+- [ ] 拔掉 API key → 頁面顯示清楚錯誤：同練習 1，待 key 還原後復驗
+
+---
+
+## 活動 4 — 補齊：MCP server 加開 HTTP transport
+
+**日期**：2026-09-12（commit `1ce65de`）
+
+### 做了什麼
+
+`Program.cs` 改成雙 transport：帶 `--http` 走 `WebApplication` + `MapMcp()`（`http://localhost:3001`，`Stateless = true`），不帶就照舊 stdio。工具／Resource／Prompt **一行沒改**——換的只有 transport。csproj 加 `ModelContextProtocol.AspNetCore` + `FrameworkReference Microsoft.AspNetCore.App`。
+
+### 驗證結果
+
+| 檢查 | 結果 |
+|------|------|
+| `POST http://localhost:3001`（`tools/list`） | **200**，`content-type: text/event-stream`，332ms |
+| 工具清單 | `customer_orders`、`get_order`、`low_stock`、`cancel_order` 四個都在，annotations 保留 |
+| stdio 照舊 | `.mcp.json` 與 Codex 設定完全沒動，agent 端連線正常 |
+
+### 地雷：stdio 版還開著時，`dotnet run` 會 build 失敗
+
+agent 把 stdio 版當子行程掛著，DLL 被鎖：
+
+```
+error MSB3027: Could not copy "OrderHub.Infrastructure.dll" ... The file is locked by: "OrderHub.Mcp (36240)"
+error MSB3021: Unable to copy file "OrderHub.Core.dll" ...
+```
+
+繞法：直接跑已編譯的 `src/OrderHub.Mcp/bin/Debug/net8.0/OrderHub.Mcp.exe --http`（不重 build），或先關掉 agent 的 MCP 連線。**同一個專案同時被 agent 掛著又要 rebuild，這個坑之後還會遇到。**
+
+### 驗收勾選
+
+- [x] HTTP transport 列得出四工具、resource、prompt
+- [x] 不帶 `--http` 照舊走 stdio
+- [x] 獨立 commit（`1ce65de`）
+
+---
+
+## 活動 4 — 練習 1：Hello Webhook
+
+**日期**：2026-09-12  
+**Workflow**：`活動4 練習1 — Hello Webhook`（id `HHqRySktnc4xV0WY`）
+
+### 節點鏈
+
+`Webhook (POST, Respond: Using 'Respond to Webhook' Node)` → `Edit Fields (Set)`（加 `receivedAt = {{ $now.toISO() }}`、Include Other Input Fields = All）→ `Respond to Webhook`（First Incoming Item）
+
+### 兩個必踩的預設值
+
+1. Webhook 的 **Respond 預設是 _Immediately_**，不改的話只會回一句 `Workflow was started`，後面接的 Respond 節點被完全忽略
+2. Set 節點的 **Include Other Input Fields 預設關閉**，不開的話送進來的 body 會被丟掉，只剩 `receivedAt`
+
+### Test URL vs Production URL（實際體會到的差別）
+
+| | Test URL | Production URL |
+|--|----------|----------------|
+| 何時活著 | 在編輯器按 Execute／Listen 之後，**只活 120 秒、收一發就停** | workflow **Activate** 後常駐 |
+| 看結果 | 畫布上每個節點亮綠勾，點開看輸入輸出 | 到 **Executions** 分頁看 |
+
+這條後來被練習 2 當成「通知端點」重用：練習 2 的通知節點打的就是這條的 Production URL，執行紀錄 **execution 30** 就是被那一發打起來的（success）——Activate 的意義在這裡才真正具體。
+
+### 驗收勾選
+
+- [x] 回應含送出的內容 + 時間戳
+- [x] 理解 Test / Production URL 差別（並在練習 2 實際用到 Production URL）
+
+---
+
+## 活動 4 — 練習 2：退單巡檢日報
+
+**日期**：2026-09-12  
+**Workflow**：`活動4 練習2 — 退單巡檢日報`（id `QRR6nKqKupoRthMa`）
+
+### 節點鏈
+
+```
+Schedule Trigger（每天 09:00）
+  → HTTP Request「查詢取消訂單」POST /api/orders/search  {"text":"過去 30 天取消的訂單"}（Always Output Data 開）
+  → Code「整理筆數」（濾掉空 item，輸出單一 item {count, orders}）
+  → AI Agent + Google Gemini Chat Model
+  → IF count > 0
+      ├─ true : GitHub 開 issue → HTTP Request 通知（打練習 1 的 Production URL）
+      └─ false: Data Table 插一列「本日無退單」
+```
+
+IF 的左值用 `{{ $('整理筆數').first().json.count }}`——AI Agent 的輸出只剩一個 `output` 欄位，`count` 已經不在裡面，只能用 `$('節點名')` 跨節點回頭拿。
+
+### 失敗紀錄（比成功更有參考價值）
+
+| execution | 停在哪 | 錯誤 | 真正原因 |
+|-----------|--------|------|----------|
+| 21 | AI Agent | `The service is receiving too many requests from you` | Gemini 免費層 429，連續重跑觸發 |
+| 22 / 27 / 28 | 查詢取消訂單 | `Service unavailable` | **5150 網站沒開**——n8n 的錯誤訊息只說上游掛了，不會告訴你是自己沒啟動 |
+| 23 | Schedule Trigger | — | 手動中斷 |
+| **29** | 全綠 | — | 網站 + MCP + key 都就緒後一次過 |
+
+**一句話**：n8n 節點的紅字幾乎都在講「上游」，排錯要先回頭確認自己的本機服務是不是活的（5150 / 3001 / 5678 三個都要）。
+
+### 思考題：如果「查什麼、怎麼查」也交給 AI Agent 自由發揮，會失去什麼？
+
+會一次失去三樣東西，而且剛好是活動 3 花整個練習建起來的：
+
+1. **白名單防線**：現在 LLM 只能填 `Status` / `MemberTier` / `DateFrom` / `DateTo` 四格，SQL 由 EF Core 生成；「幫我把所有訂單刪掉」在翻譯層就被擋成 422。若讓 agent 自由決定查法（自己組 SQL、或掛一個萬用查詢工具），這道牆就沒了——注入與誤刪從「不可能」變成「靠 prompt 祈禱」。
+2. **可測試性**：`OrderSearchService` 可以用固定輸入斷言固定輸出；agent 自由發揮的查詢每次都可能飄，測試寫不出斷言，壞掉也沒人知道。
+3. **日報數字的可信度**：現在 AI 拿到的是查詢結果 JSON，system message 又限制「只根據提供的資料寫，不要編造數字」。若連查什麼都它決定，日報裡的「本月退單 N 筆」就沒有任何一層可以回頭覆核——你無法分辨那是真的 N 筆，還是它少查了一個條件。
+
+所以分工是刻意的：**查詢留在產品程式碼裡（有白名單、有測試、有 code review），n8n 只做編排，AI 只做摘要。**
+
+### 驗收勾選
+
+- [x] 先在系統裡製造素材：#212 陳志明（Gold）取消，NT$2,088
+- [x] Execute workflow → 開出 GitHub issue、通知送達（觸發練習 1 execution 30）
+- [x] 日報數字與 API 查詢結果一致（都是 #212 這一筆）
+- [ ] **false 分支（本日無退單）尚未跑過**：n8n 事件紀錄裡 Data Table 節點只在探索用的 `My workflow` 出現過。把查詢文字改成「昨天取消的訂單」即可觸發——該文字已實測 `POST /api/orders/search` 回 `[]`。另需先確認 Data Table `巡檢紀錄`（欄位 `date`、`note`）已建立，且節點裡重選過該表（匯出的 JSON 裡 `dataTableId` 是空的）
+- [x] 思考題已寫入本節
+
+---
+
+## 活動 4 — 練習 3：MCP 合體——讓流程裡的 AI 會用你的工具
+
+**日期**：2026-09-12  
+**做法**：直接在練習 2 的同一條 workflow（`QRR6nKqKupoRthMa`）的 AI Agent 下掛 **MCP Client Tool**
+
+### 設定
+
+| 項目 | 值 |
+|------|-----|
+| Endpoint | `http://localhost:3001` |
+| Server Transport | HTTP Streamable |
+| Authentication | None |
+| Tools to Include | **Selected → 只勾 `get_order`** |
+| System Message 追加 | 「對每筆取消的訂單，先用工具查出品項明細與會員等級，日報中引用查到的實際數字」 |
+
+### 只掛唯讀工具，是活動 1 approval 哲學的另一個形狀
+
+`cancel_order` 就在同一台 server 上、同一個 endpoint 列得出來，但**不勾**。無人流程裡沒有人可以按「同意」，所以最強的保護不是「跳確認」而是**根本不給工具**——權限控制往前挪到工具清單這一層。
+
+### 執行證據（execution 29，manual，success）
+
+節點軌跡（來自 `~/.n8n/n8nEventLog.log`）：
+
+```
+Schedule Trigger → 查詢取消訂單 → 整理筆數 → AI Agent
+    ├─ Google Gemini Chat Model   (第 1 次：決定要呼叫工具)
+    ├─ MCP Client                 (nodeId 5f175e99…，掛的工具只有 get_order)
+    └─ Google Gemini Chat Model   (第 2 次：拿到工具結果後寫日報)
+  → IF 有退單 → GitHub 開 issue → 通知
+```
+
+`AI Agent` 中間夾著一次 `MCP Client` 的 started/finished，就是「真的有深挖」的直接證據——不是看日報寫得像不像，而是看執行紀錄裡工具被呼叫過。
+
+### 有深挖 vs 沒深挖的日報差異
+
+| | 練習 2（只有 search API 的六欄） | 練習 3（加掛 `get_order`） |
+|--|--------------------------------|---------------------------|
+| AI 拿得到的資料 | `id` / `customerName` / `tier` / `status` / `total` / `createdAt` | 再加上**品項明細、單價快照、折扣、應付總額**（`get_order` 的回傳） |
+| 日報能寫到什麼粒度 | 「#212 陳志明 Gold，NT$2,088」——只能複述查詢結果 | 「#212 退掉的是哪幾樣商品、各幾件、原價多少、Gold 折後 2,088」 |
+| 數字來源 | 一次查詢的摘要欄位 | 每筆訂單回頭跟 server 要真實明細 |
+| 失敗模式 | 想講細節只能瞎編 | 工具查不到就查不到，編不出來 |
+| 代價 | 一次 LLM 呼叫 | 多一輪 LLM + N 次工具呼叫（退單多時會變慢、也更容易撞 429） |
+
+> **待補**：把 execution 29 開出的 GitHub issue 內文，與練習 2 時期（execution 14 / 16 / 19）的 issue 內文各貼第一行到這裡，做字面對照。
+
+### 驗收勾選
+
+- [x] 執行紀錄看得到 agent 對退單呼叫 MCP 工具（execution 29，`MCP Client` 節點 started/finished，工具清單只含 `get_order`）
+- [x] 有深挖 vs 沒深挖的差異已寫入本節
+- [ ] 兩份 issue 內文字面對照（待貼）
+
+---
+
 ## 通用四問
 
 ### 1. 我的任務拆解
